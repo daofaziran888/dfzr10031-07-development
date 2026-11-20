@@ -8,6 +8,9 @@ from typing import Any
 
 from app.seed import SEED_ROWS
 
+# 实验样本分配是分析实验的子资源，不单独占运营概览里的一行模块。
+HIDDEN_MODULES = {"experiment_observation", "experiment_sample"}
+
 
 class Store:
     def __init__(self) -> None:
@@ -16,10 +19,18 @@ class Store:
         }
 
     def module_names(self) -> list[str]:
-        return sorted(self._tables)
+        return sorted(
+            name for name in self._tables if name not in HIDDEN_MODULES
+        )
 
     def rows(self, module: str) -> list[dict[str, Any]]:
         return self._tables.setdefault(module, [])
+
+    def reset(self) -> None:
+        """丢弃运行期修改，按示例数据恢复到初始状态（测试与本地重置用）。"""
+        self._tables = {
+            name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
+        }
 
     def find(self, module: str, entry_id: int) -> dict[str, Any] | None:
         for row in self.rows(module):

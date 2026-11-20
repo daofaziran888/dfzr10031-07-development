@@ -53,6 +53,7 @@ npm run dev
 | 维度管理 | `dimension` | 分析维度 | 维度编号、维度名称、维度类型 |
 | 数据集管理 | `dataset` | 分析数据集 | 数据集编号、数据集名称、来源类型 |
 | 分析实验 | `experiment` | 实验方案 | 方案编号、实验名称、分析数据集 |
+| 实验样本分配 | `experiment_sample` | 分组名单、来源观测 | 实验编号、参与者编号、实验臂、启动时地区、更正后地区 |
 | OLAP查询 | `query_builder` | 查询模板 | 模板编号、模板名称、查询语句 |
 | 数据看板 | `dashboard` | 看板配置 | 看板编号、看板名称、包含图表 |
 | 图表配置 | `chart` | 图表 | 图表编号、图表名称、图表类型 |
@@ -74,3 +75,26 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 实验样本分配表
+
+分析实验在方案之外维护一张实验样本分配表，接口挂在 `/api/experiment/{id}/sample`：
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /sample` | 分组名单、各臂人数、未加入名单的观测 |
+| `POST /sample/sync` | 从来源观测归并同一参与者，生成或刷新名单 |
+| `GET /sample/aggregate?region=&arm=&region_basis=` | 按名单聚合各臂分子/分母，待归属观测单列 |
+| `GET /sample/report` | 实验报告：人群口径、样本分母、地区口径与更正参与者 |
+| `GET /sample/participants/{pid}/reconcile` | 重新查询历史曝光，核对实际分组与分母归属 |
+| `GET/POST /sample/observations` | 查看或补录来源观测 |
+
+规则：
+
+- 来源观测需要参与者编号、观测时间和分组字段；同一参与者的多条观测按参与者编号归并成名单一行。
+- 同一参与者在一次实验中只进入一个实验臂，以首次曝光记录的分组字段为准；已发生的曝光始终归入实际收到的实验臂，后续记录或地区更正不会重新分组。
+- `启动时地区`取自首次曝光，用于复验原分层设计；`更正后地区`取自最新来源观测，用于回答当前地区的响应差异。两种口径通过 `region_basis=start|current` 切换。
+- 没有曝光或没有分组字段的观测不进入名单，在聚合结果里单列，不进入任何实验臂的分子或分母。
+- 查询时按分层地区和实验臂筛选，筛后的分子、分母与待归属记录都使用同一次查询的人群范围；实验臂筛选不适用于没有实验臂的待归属观测。
+
+测试：`cd backend && pip install -r requirements-dev.txt && python3 -m pytest tests -q`。

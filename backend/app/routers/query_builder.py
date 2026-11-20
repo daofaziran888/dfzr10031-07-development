@@ -6,6 +6,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.services.experiment_sample import SampleError
+from app.services.experiment_sample import service as sample_service
 from app.services.query_builder import QueryBuilderService
 
 router = APIRouter(prefix="/api/query_builder", tags=["OLAP查询"])
@@ -21,6 +23,22 @@ def export_entries() -> dict[str, Any]:
     """导出OLAP查询清单：返回当前过滤条件下的全量数据。"""
     items, total = service.list_entries(page=1, size=10000)
     return {"module": "query_builder", "total": total, "items": items}
+
+
+@router.get("/experiment/{entry_id}/sample_metrics", response_model=dict)
+def sample_metrics(
+    entry_id: int,
+    region: str | None = Query(default=None, description="按分层地区筛选"),
+    arm: str | None = Query(default=None, description="按实验臂筛选"),
+    region_basis: str = Query(default="start", description="start=启动时地区，current=更正后地区"),
+) -> dict[str, Any]:
+    """OLAP 侧入口：按实验样本分配表聚合各臂指标，未加入名单的观测单列。"""
+    try:
+        return sample_service.aggregate(
+            entry_id, region=region, arm=arm, region_basis=region_basis
+        )
+    except SampleError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
 
 
 @router.get("", response_model=PageResult[dict])

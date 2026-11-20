@@ -42,3 +42,18 @@ body { margin: 0; background: #f6f8fb; color: #1f2937; }
 .modal-field span{font-size:13px;color:var(--muted)}
 .modal-field input{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px}
 .modal-foot{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);padding:12px 18px}
+.sample-panel{margin-top:20px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.sample-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.sample-head h3,.sample-head h4{margin:0 0 4px}
+.sample-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:12px 0}
+.sample-toolbar select{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:#fff}
+.sample-hint{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}
+.sample-panel h4{margin:16px 0 8px;font-size:14px}
+.sample-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-top:12px}
+.sample-definitions{margin-top:14px;font-size:13px;color:#334155}
+.sample-definitions summary{cursor:pointer;color:var(--brand)}
+.sample-definitions p{margin:6px 0;line-height:1.6}
+.reconcile-card{margin:14px 0;border:1px solid var(--border);border-radius:8px;padding:12px 14px;background:#f9fbfd}
+.finding-list{margin:8px 0;padding-left:20px;font-size:13px;line-height:1.7}
+.tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:10px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.tag.warn{border-color:#f0b429;background:#fff7e0;color:#92400e}

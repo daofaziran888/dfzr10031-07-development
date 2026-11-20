@@ -55,6 +55,96 @@
       </tbody>
     </table>
 
+
+    <section class="sample-panel" data-module="query_builder_sample">
+      <header class="sample-head">
+        <div>
+          <h3>按实验样本分配表聚合</h3>
+          <p class="page-desc">
+            以分组名单为分母聚合各臂指标；未加入名单的观测单列。筛选后的分子、分母和待归属记录使用同一次查询的人群范围。
+          </p>
+        </div>
+      </header>
+      <div class="sample-toolbar">
+        <label class="filter-item">
+          <span>实验方案</span>
+          <select v-model.number="sampleEntryId" @change="loadSampleMetrics">
+            <option v-for="item in sampleOptions" :key="item.id" :value="item.id">
+              {{ item.方案编号 }} · {{ item.实验名称 }}
+            </option>
+          </select>
+        </label>
+        <label class="filter-item">
+          <span>分层地区</span>
+          <select v-model="sampleRegion" @change="loadSampleMetrics">
+            <option value="">全部地区</option>
+            <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
+          </select>
+        </label>
+        <label class="filter-item">
+          <span>实验臂</span>
+          <select v-model="sampleArm" @change="loadSampleMetrics">
+            <option value="">全部实验臂</option>
+            <option v-for="arm in armOptions" :key="arm" :value="arm">{{ arm }}</option>
+          </select>
+        </label>
+        <label class="filter-item">
+          <span>地区口径</span>
+          <select v-model="sampleRegionBasis" @change="loadSampleMetrics">
+            <option value="start">启动时地区</option>
+            <option value="current">更正后地区</option>
+          </select>
+        </label>
+      </div>
+      <p class="sample-hint">{{ sampleMetrics?.scope ?? '选择实验方案后按分组名单聚合。' }}</p>
+      <div class="sample-grid">
+        <div>
+          <h4>各臂指标</h4>
+          <table class="data-table">
+            <thead>
+              <tr><th>地区</th><th>实验臂</th><th>分母</th><th>分子</th><th>转化率</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="cell in sampleMetrics?.cells ?? []" :key="`${cell.地区}-${cell.实验臂}`">
+                <td>{{ cell.地区 }}</td>
+                <td>{{ cell.实验臂 }}</td>
+                <td>{{ cell.分母 }}</td>
+                <td>{{ cell.分子 }}</td>
+                <td>{{ cell.转化率 === null ? '—' : `${(cell.转化率 * 100).toFixed(1)}%` }}</td>
+              </tr>
+              <tr v-if="!(sampleMetrics?.cells ?? []).length">
+                <td colspan="5" class="empty-state">当前查询范围内没有名单参与者</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="page-foot">
+            <span>
+              合计分母 {{ sampleMetrics?.totals.分母 ?? 0 }} 人、分子 {{ sampleMetrics?.totals.分子 ?? 0 }} 人
+            </span>
+          </p>
+        </div>
+        <div>
+          <h4>未加入名单的观测（单列）</h4>
+          <table class="data-table">
+            <thead>
+              <tr><th>观测编号</th><th>参与者编号</th><th>地区</th><th>转化</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in sampleMetrics?.pending_observations ?? []" :key="item.观测编号">
+                <td>{{ item.观测编号 }}</td>
+                <td>{{ item.参与者编号 || '—' }}</td>
+                <td>{{ item.地区 }}</td>
+                <td>{{ item.转化 ? '是' : '否' }}</td>
+              </tr>
+              <tr v-if="!(sampleMetrics?.pending_observations ?? []).length">
+                <td colspan="4" class="empty-state">当前查询范围内没有待归属观测</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条OLAP查询记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -84,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { request } from '@/api/client'
 
@@ -95,6 +185,78 @@ const columns = ["模板编号", "模板名称", "查询语句", "参数定义",
 const actions = ["保存模板", "发布模板", "停用模板"]
 const statuses = ["草稿", "已保存", "已发布", "已停用"]
 const stats = [{"label": "已发布模板", "value": 0}, {"label": "草稿模板", "value": 0}, {"label": "停用模板", "value": 0}]
+
+type SampleMetricCell = { 地区: string; 实验臂: string; 分母: number; 分子: number; 转化率: number | null }
+
+type SampleMetrics = {
+  scope: string
+  cells: SampleMetricCell[]
+  totals: { 分母: number; 分子: number; 待归属观测: number }
+  pending_observations: { 观测编号: string; 参与者编号: string; 地区: string; 转化: boolean }[]
+}
+
+const knownRegions = ref<string[]>([])
+const knownArms = ref<string[]>([])
+const regionOptions = computed(() => knownRegions.value)
+const armOptions = computed(() => knownArms.value)
+const sampleOptions = ref<{ id: number; 方案编号: string; 实验名称: string }[]>([])
+const sampleEntryId = ref<number | null>(null)
+const sampleRegion = ref('')
+const sampleArm = ref('')
+const sampleRegionBasis = ref<'start' | 'current'>('start')
+const sampleMetrics = ref<SampleMetrics | null>(null)
+
+async function loadSampleMetrics() {
+  if (!sampleEntryId.value) {
+    sampleMetrics.value = null
+    return
+  }
+  const params = new URLSearchParams()
+  if (sampleRegion.value) params.set('region', sampleRegion.value)
+  if (sampleArm.value) params.set('arm', sampleArm.value)
+  params.set('region_basis', sampleRegionBasis.value)
+  try {
+    const response = await request(
+      `${ENDPOINT}/experiment/${sampleEntryId.value}/sample_metrics?${params.toString()}`,
+    )
+    const payload = await response.json()
+    if (!response.ok) {
+      throw new Error(payload.detail || '实验样本聚合读取失败')
+    }
+    const metrics = payload as SampleMetrics
+    sampleMetrics.value = metrics
+    knownRegions.value = [
+      ...new Set([
+        ...knownRegions.value,
+        ...metrics.cells.map((cell) => cell.地区),
+        ...metrics.pending_observations.map((item) => item.地区),
+      ]),
+    ].sort()
+    knownArms.value = [
+      ...new Set([...knownArms.value, ...metrics.cells.map((cell) => cell.实验臂)]),
+    ]
+  } catch (error) {
+    sampleMetrics.value = null
+    errorMessage.value = error instanceof Error ? error.message : '实验样本聚合读取失败'
+  }
+}
+
+async function loadSampleOptions() {
+  try {
+    const response = await request('/api/experiment?size=200')
+    const payload = await response.json()
+    sampleOptions.value = (payload.items ?? []).map((item: Row) => ({
+      id: Number(item.id),
+      方案编号: String(item.方案编号 ?? ''),
+      实验名称: String(item.实验名称 ?? ''),
+    }))
+    const running = (payload.items ?? []).find((item: Row) => item.status === '运行中')
+    sampleEntryId.value = Number(running?.id ?? sampleOptions.value[0]?.id ?? 0) || null
+    await loadSampleMetrics()
+  } catch {
+    sampleOptions.value = []
+  }
+}
 
 const rows = ref<Row[]>([])
 const total = ref(0)
@@ -177,5 +339,8 @@ async function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(async () => {
+  await reload()
+  await loadSampleOptions()
+})
 </script>
